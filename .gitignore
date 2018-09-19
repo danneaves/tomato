@@ -1,0 +1,5 @@
+.idea/
+.env
+vendor/
+bin/
+!bin/tomato

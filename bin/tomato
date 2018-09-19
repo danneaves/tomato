@@ -1,0 +1,29 @@
+#!/usr/bin/env php
+<?php
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+use Symfony\Component\Console\Application;
+use Pimple\Container;
+use Symfony\Component\Dotenv\Dotenv;
+use Tomato\Service\Provider;
+use Tomato\Command;
+
+$dotEnv = new Dotenv();
+$dotEnv->load(dirname(__DIR__) . '/.env');
+
+$container = new Container();
+$container->register(new Provider\ConfigServiceProvider());
+$container->register(new Provider\GitServiceProvider());
+$container->register(new Provider\CliServiceProvider());
+$container->register(new Provider\ConsoleOutputServiceProvider());
+
+$app = new Application('Tomato', '0.1.0');
+$app->addCommands([
+    new Command\Deploy($container),
+    new Command\Git\PullRequest($container),
+    new Command\Git\Merge($container),
+    new Command\Git\MergeDown($container),
+    new Command\Git\Branch($container),
+]);
+$app->run(null, $container['service:console-output']);

@@ -1,0 +1,26 @@
+{
+    "name": "danneaves/tomato",
+    "description": "Git commands in bulk for multiple projects with a common branch structure",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Daniel Neaves",
+            "email": "dan@danielneaves.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Tomato\\": "src/"
+        }
+    },
+    "require": {
+        "symfony/console": "^4.0",
+        "pimple/pimple": "^3.2",
+        "knplabs/github-api": "^2.7",
+        "php-http/guzzle6-adapter": "^1.1",
+        "league/climate": "^3.2",
+        "phpseclib/phpseclib": "^2.0",
+        "symfony/dotenv": "^4.1"
+    }
+}
