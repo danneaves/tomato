@@ -25,5 +25,7 @@ $app->addCommands([
     new Command\Git\Merge($container),
     new Command\Git\MergeDown($container),
     new Command\Git\Branch($container),
+    new Command\Git\Tag($container),
+    new Command\Git\Projects($container),
 ]);
 $app->run(null, $container['service:console-output']);
