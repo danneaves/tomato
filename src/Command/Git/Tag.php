@@ -16,16 +16,19 @@ use Tomato\Command\AbstractCommand;
 
 class Tag extends AbstractCommand
 {
+    private const TAG_LEVEL_ALPHA = 'alpha';
     private const TAG_LEVEL_BETA = 'beta';
     private const TAG_LEVEL_RC = 'rc';
     private const TAG_LEVEL_STABLE = 'stable';
 
     private const SOURCE_TAG_SUFFIXES = [
+        self::TAG_LEVEL_ALPHA => '-alpha',
         self::TAG_LEVEL_BETA => '-beta',
         self::TAG_LEVEL_RC => '-rc',
     ];
 
     private const DESTINATION_TAG_SUFFIXES = [
+        self::TAG_LEVEL_BETA => '-beta.1',
         self::TAG_LEVEL_RC => '-rc.1',
         self::TAG_LEVEL_STABLE => '',
     ];
@@ -76,7 +79,21 @@ class Tag extends AbstractCommand
                 false
             )
             ->addOption(
-                'release-candidate',
+                'safe-prune',
+                null,
+                InputOption::VALUE_OPTIONAL,
+                'Only prune non-stable versions',
+                true
+            )
+            ->addOption(
+                'beta-release',
+                null,
+                InputOption::VALUE_OPTIONAL,
+                'Construct a beta from the latest alpha in a range of projects',
+                false
+            )
+            ->addOption(
+                'rc-release',
                 null,
                 InputOption::VALUE_OPTIONAL,
                 'Construct a release candidate from the latest beta in a range of projects',
@@ -116,12 +133,15 @@ class Tag extends AbstractCommand
         $name = $input->getOption('name');
         $scope = $input->getOption('scope');
         $prune = $input->getOption('prune');
-        $releaseCandidate = $input->getOption('release-candidate');
+        $safePrune = (bool)$input->getOption('safe-prune');
+        $betaRelease = $input->getOption('beta-release');
+        $releaseCandidate = $input->getOption('rc-release');
         $stableRelease = $input->getOption('stable-release');
         $delete = $input->getOption('delete');
 
         $counts = array_count_values([
             false === $prune ? 0 : 1,
+            false === $betaRelease ? 0 : 1,
             false === $releaseCandidate ? 0 : 1,
             false === $stableRelease ? 0 : 1,
             false === $delete ? 0 : 1,
@@ -139,7 +159,11 @@ class Tag extends AbstractCommand
             : $input->getOption('projects');
 
         if (false !== $prune) {
-            $this->prune();
+            $this->prune($safePrune);
+        }
+
+        if (false !== $betaRelease) {
+            $this->bumpTag(self::TAG_LEVEL_ALPHA, self::TAG_LEVEL_BETA);
         }
 
         if (false !== $releaseCandidate) {
@@ -152,15 +176,20 @@ class Tag extends AbstractCommand
     }
 
     /**
+     * @param bool $safe
      * @throws \Github\Exception\InvalidArgumentException
      */
-    private function prune(): void
+    private function prune($safe = true): void
     {
         /** @var GitData $git */
         $git = $this->git->api('git');
 
         /** @var GitData\References $refs */
         $refs = $git->references();
+
+        /** @var Repo $repos */
+        $repos = $this->git->api('repos');
+        $releases = $repos->releases();
 
         foreach ($this->projects as $project) {
             $tagObjects = $refs->tags($this->config['service']['git']['company'], $project);
@@ -170,6 +199,11 @@ class Tag extends AbstractCommand
                 $uriParts = explode('/', $tagObject['ref']);
                 $tags[] = $uriParts[2];
             }
+
+            $this->output->writeln([
+                '<info>Found tags:</info>',
+                '<info>' . implode(', ', $tags) . '</info>',
+            ]);
 
             // Get the major versions so we can sort
             $majorVersions = [];
@@ -184,15 +218,25 @@ class Tag extends AbstractCommand
             }
 
             // Decide what to keep and what to remove
-            $keep = $remove = [];
+            $keep = [];
             foreach ($majorVersions as $majorVersion => $versions) {
                 $majorVersions[$majorVersion] = Semver::rsort($versions);
 
                 $keep[] = array_shift($majorVersions[$majorVersion]);
+            }
 
-                if ([] !== $remove) {
-                    array_push($remove, ...$majorVersions[$majorVersion]);
-                }
+            $remove = array_diff($tags, $keep);
+
+            if ($safe) {
+                $remove = array_filter($remove, function ($tag) {
+                    return preg_match('/' . implode('|', [
+                        self::TAG_LEVEL_ALPHA,
+                        self::TAG_LEVEL_BETA,
+                        self::TAG_LEVEL_RC,
+                    ]) . '/', $tag);
+                });
+
+                $keep = array_diff($tags, $remove);
             }
 
             $this->output->writeln([
@@ -207,6 +251,9 @@ class Tag extends AbstractCommand
 
             foreach ($remove as $item) {
                 $refs->remove($this->config['service']['git']['company'], $project, 'tags/' . $item);
+
+                $release = $releases->tag($this->config['service']['git']['company'], $project, $item);
+                $releases->remove($this->config['service']['git']['company'], $project, $release['id']);
             }
 
             $this->output->writeln('<info>Finished pruning ' . $project . '</info>');
@@ -264,19 +311,19 @@ class Tag extends AbstractCommand
                 continue;
             }
 
-            $rc = substr($latest, 0, strpos($latest, self::SOURCE_TAG_SUFFIXES[$from])) .
+            $next = substr($latest, 0, strpos($latest, self::SOURCE_TAG_SUFFIXES[$from])) .
                 self::DESTINATION_TAG_SUFFIXES[$to];
             $commit = $tags[$latest]['object']['sha'];
 
             $this->output->writeln(
-                '<info>Creating ' . $rc . ' for ' . $project . ' from ' . $latest . ' [' . $commit . ']</info>'
+                '<info>Creating ' . $next . ' for ' . $project . ' from ' . $latest . ' [' . $commit . ']</info>'
             );
 
-            $message = 'Automated tag creation from [' . $latest . '] -> [' . $rc . ']';
+            $message = 'Automated tag creation from [' . $latest . '] -> [' . $next . ']';
 
             try {
                 $tagApi->create($this->config['service']['git']['company'], $project, [
-                    'tag' => $rc,
+                    'tag' => $next,
                     'message' => $message,
                     'object' => $commit,
                     'type' => 'commit',
@@ -288,16 +335,16 @@ class Tag extends AbstractCommand
                 ]);
 
                 $refs->create($this->config['service']['git']['company'], $project, [
-                    'ref' => 'refs/tags/' . $rc,
+                    'ref' => 'refs/tags/' . $next,
                     'sha' => $commit,
                 ]);
 
                 $response = $releases->create($this->config['service']['git']['company'], $project, [
-                    'tag_name' => $rc,
+                    'tag_name' => $next,
                     'target_commitish' => $commit,
-                    'name' => $rc,
+                    'name' => $next,
                     'body' => $message,
-                    'prerelease' => true,
+                    'prerelease' => $to !== self::TAG_LEVEL_STABLE,
                 ]);
             } catch (ExceptionInterface $e) {
                 $this->output->writeln('<error>Unable to create references: ' . $e->getMessage() . '</error>');
