@@ -27,5 +27,6 @@ $app->addCommands([
     new Command\Git\Branch($container),
     new Command\Git\Tag($container),
     new Command\Git\Projects($container),
+    new Command\Config($container),
 ]);
 $app->run(null, $container['service:console-output']);

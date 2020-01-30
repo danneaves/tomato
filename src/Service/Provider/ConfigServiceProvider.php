@@ -18,26 +18,24 @@ class ConfigServiceProvider implements ServiceProviderInterface
     public function register(Container $pimple)
     {
         $pimple['config'] = function () {
-            $branches = getenv('TOMATO_BRANCHES') ? explode(',', getenv('TOMATO_BRANCHES')) : [];
-            $projects = [];
-            if (getenv('TOMATO_PROJECTS')) {
-                $projectGroups = explode('#', getenv('TOMATO_PROJECTS'));
+            $file = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'tomato.json';
+            $config = [
+                'branches' => [],
+                'projects' => [],
+            ];
 
-                foreach ($projectGroups as $group) {
-                    list($groupTitle, $groupProjects) = explode('|', $group);
-
-                    $projects[$groupTitle] = explode(',', $groupProjects);
-                }
+            if (file_exists($file)) {
+                $configFile = json_decode(file_get_contents($file), true);
+                $config['branches'] = $configFile['branches'] ?? [];
+                $config['projects'] = $configFile['projects'] ?? [];
             }
 
-            $config = [
-                'branches' => $branches,
-                'projects' => $projects,
+            $config = array_merge($config, [
                 'service' => [
                     'git' => [
-                        'company' => getenv('TOMATO_GIT_ORG') ?: 'Eagle-Eye-Solutions',
-                        'username' => getenv('TOMATO_GIT_USER') ?: 'daniel.neaves@eagleeye.com',
-                        'password' => getenv('TOMATO_GIT_PASS') ?: 'GolfZebra123',
+                        'company' => getenv('TOMATO_GIT_ORG') ?: '',
+                        'username' => getenv('TOMATO_GIT_USER') ?: '',
+                        'password' => getenv('TOMATO_GIT_PASS') ?: '',
                     ],
                     'console-output' => [
                         'title' => [
@@ -46,16 +44,15 @@ class ConfigServiceProvider implements ServiceProviderInterface
                         ],
                     ],
                 ],
-            ];
+            ]);
 
             $all = [];
-            foreach ($config['projects'] as $project) {
-                $all = array_merge($all, $project);
+            if (!empty($config['projects'])) {
+                $all = array_merge(...array_values($config['projects']));
+                sort($all);
             }
 
-            sort($all);
-
-            $config['projects']['all'] = $all;
+            $config['projects']['all'] = array_unique($all);
             return $config;
         };
     }
