@@ -286,6 +286,9 @@ class Tag extends AbstractCommand
         $releases = $repo->releases();
 
         foreach ($this->projects as $project) {
+            $this->output->writeln(
+                '<title>Promoting latest ' . $project . ' tag from ' . $from . ' to ' . $to . '</title>'
+            );
             try {
                 $tagObjects = $refs->tags($this->config['service']['git']['company'], $project);
             } catch (RuntimeException $e) {
@@ -305,8 +308,8 @@ class Tag extends AbstractCommand
             $latest = &$tagList[0];
             if (false === strpos($latest, self::SOURCE_TAG_SUFFIXES[$from])) {
                 $this->output->writeln(
-                    '<info>' . $from . ' tag is not the latest tag for ' . $project .
-                    ', found ' . $latest . '</info>'
+                    '<error>' . $from . ' tag is not the latest tag for ' . $project .
+                    ', found ' . $latest . '</error>' . PHP_EOL
                 );
                 continue;
             }
@@ -347,17 +350,21 @@ class Tag extends AbstractCommand
                     'prerelease' => $to !== self::TAG_LEVEL_STABLE,
                 ]);
             } catch (ExceptionInterface $e) {
-                $this->output->writeln('<error>Unable to create references: ' . $e->getMessage() . '</error>');
+                $this->output->writeln(
+                    '<error>Unable to create references: ' . $e->getMessage() . '</error>' . PHP_EOL
+                );
                 continue;
             }
 
             if (!isset($response['html_url'])) {
-                $this->output->writeln('<error>Url not returned in response: ' . json_encode($response) . '</error>');
+                $this->output->writeln(
+                    '<error>Url not returned in response: ' . json_encode($response) . '</error>' . PHP_EOL
+                );
                 continue;
             }
 
             $this->output->writeln(
-                '<info>Created tag: ' . $response['html_url'] . '</info>'
+                '<info>Created tag: ' . $response['html_url'] . '</info>' . PHP_EOL
             );
         }
     }
