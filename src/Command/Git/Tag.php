@@ -9,9 +9,11 @@ use Github\Client;
 use Github\Exception\ExceptionInterface;
 use Github\Exception\RuntimeException;
 use Symfony\Component\Console\Exception\RuntimeException as ConsoleRuntimeException;
+use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Tomato\Command\AbstractCommand;
 
 class Tag extends AbstractCommand
@@ -44,6 +46,11 @@ class Tag extends AbstractCommand
     protected $config;
 
     /**
+     * @var InputInterface
+     */
+    private $input;
+
+    /**
      * @var OutputInterface
      */
     protected $output;
@@ -52,7 +59,6 @@ class Tag extends AbstractCommand
      * @var string[]
      */
     protected $projects;
-
 
     /**
      * @throws \Symfony\Component\Console\Exception\InvalidArgumentException
@@ -63,6 +69,7 @@ class Tag extends AbstractCommand
             ->setDescription('Control tags for a project or for a group of projects')
             ->addOption('source', 's', InputOption::VALUE_OPTIONAL, 'Source branch')
             ->addOption('name', 'a', InputOption::VALUE_OPTIONAL, 'Name for the tag')
+            ->addOption('confirm', 'y', InputOption::VALUE_NONE, 'Answer yes to all questions')
             ->addOption('scope', null, InputOption::VALUE_OPTIONAL, 'Project scope: all|root|sub', 'all')
             ->addOption(
                 'delete',
@@ -127,6 +134,7 @@ class Tag extends AbstractCommand
         /** @var Client $git */
         $this->git = $this->container['service:git'];
         $this->config = $this->container['config'];
+        $this->input = $input;
         $this->output = $output;
 
         $source = $input->getOption('source');
@@ -278,12 +286,7 @@ class Tag extends AbstractCommand
 
         /** @var GitData $git */
         $git = $this->git->api('git');
-        /** @var Repo $repo */
-        $repo = $this->git->api('repo');
-
         $refs = $git->references();
-        $tagApi = $git->tags();
-        $releases = $repo->releases();
 
         foreach ($this->projects as $project) {
             $this->output->writeln(
@@ -298,74 +301,120 @@ class Tag extends AbstractCommand
                 continue;
             }
 
-            $tags = [];
+            $tagsByMinor = [];
             foreach ($tagObjects as $tagObject) {
                 $uriParts = explode('/', $tagObject['ref']);
-                $tags[$uriParts[2]] = $tagObject;
+                $tagName = $uriParts[2];
+
+                $tagParts = explode('.', $tagName);
+
+                if (count($tagParts) < 3 || !is_numeric($tagParts[0]) || !is_numeric($tagParts[1])) {
+                    if ($this->output->isVerbose()) {
+                        $this->output->writeln('<error>Ignoring invalid tag: ' . $tagName . '</error>');
+                    }
+                    continue;
+                }
+
+                $tagsByMinor[implode('.', array_slice($tagParts, 0, 2))][$tagName] = $tagObject;
             }
 
-            $tagList = Semver::rsort(array_keys($tags));
-            $latest = &$tagList[0];
-            if (false === strpos($latest, self::SOURCE_TAG_SUFFIXES[$from])) {
+            // Get the tags in order, with the highest first
+            krsort($tagsByMinor);
+
+            $i = 0;
+            foreach ($tagsByMinor as $tags) {
+                $this->bumpMinorTag($from, $to, $tags, $project, 0 == $i++);
+            }
+        }
+    }
+
+    private function bumpMinorTag(string $from, string $to, array $tags, string $project, bool $newest = false)
+    {
+        /** @var GitData $git */
+        $git = $this->git->api('git');
+        /** @var Repo $repo */
+        $repo = $this->git->api('repo');
+
+        $refs = $git->references();
+        $tagApi = $git->tags();
+        $releases = $repo->releases();
+
+        $tagList = Semver::rsort(array_keys($tags));
+        $latest = &$tagList[0];
+
+        if (false === strpos($latest, self::SOURCE_TAG_SUFFIXES[$from])) {
+            if ($this->output->isVerbose()) {
                 $this->output->writeln(
                     '<error>' . $from . ' tag is not the latest tag for ' . $project .
                     ', found ' . $latest . '</error>' . PHP_EOL
                 );
-                continue;
             }
-
-            $next = substr($latest, 0, strpos($latest, self::SOURCE_TAG_SUFFIXES[$from])) .
-                self::DESTINATION_TAG_SUFFIXES[$to];
-            $commit = $tags[$latest]['object']['sha'];
-
-            $this->output->writeln(
-                '<info>Creating ' . $next . ' for ' . $project . ' from ' . $latest . ' [' . $commit . ']</info>'
-            );
-
-            $message = 'Automated tag creation from [' . $latest . '] -> [' . $next . ']';
-
-            try {
-                $tagApi->create($this->config['service']['git']['company'], $project, [
-                    'tag' => $next,
-                    'message' => $message,
-                    'object' => $commit,
-                    'type' => 'commit',
-                    'tagger' => [
-                        'name' => $this->config['service']['git']['username'],
-                        'email' => $this->config['service']['git']['username'],
-                        'date' => date(DATE_ATOM),
-                    ],
-                ]);
-
-                $refs->create($this->config['service']['git']['company'], $project, [
-                    'ref' => 'refs/tags/' . $next,
-                    'sha' => $commit,
-                ]);
-
-                $response = $releases->create($this->config['service']['git']['company'], $project, [
-                    'tag_name' => $next,
-                    'target_commitish' => $commit,
-                    'name' => $next,
-                    'body' => $message,
-                    'prerelease' => $to !== self::TAG_LEVEL_STABLE,
-                ]);
-            } catch (ExceptionInterface $e) {
-                $this->output->writeln(
-                    '<error>Unable to create references: ' . $e->getMessage() . '</error>' . PHP_EOL
-                );
-                continue;
-            }
-
-            if (!isset($response['html_url'])) {
-                $this->output->writeln(
-                    '<error>Url not returned in response: ' . json_encode($response) . '</error>' . PHP_EOL
-                );
-                continue;
-            }
-
-            $this->output->writeln(
-                '<info>Created tag: ' . $response['html_url'] . '</info>' . PHP_EOL
-            );
+            return;
         }
+
+        $next = substr($latest, 0, strpos($latest, self::SOURCE_TAG_SUFFIXES[$from])) .
+            self::DESTINATION_TAG_SUFFIXES[$to];
+        $commit = $tags[$latest]['object']['sha'];
+
+        if (!$newest && !$this->input->getOption('confirm')) {
+            /** @var QuestionHelper $helper */
+            $helper = $this->getHelper('question');
+            if (!$helper->ask($this->input, $this->output, new ConfirmationQuestion(
+                '<info>You are about to create ' . $next . ' for ' . $project . ' from ' . $latest . ' [' . $commit .
+                '] - would you like to continue?</info>'
+            ))) {
+                $this->output->writeln('<info>Skipping ' . $latest . ' for ' . $project . '</info>');
+                return;
+            }
+        }
+
+        $this->output->writeln(
+            '<info>Creating ' . $next . ' for ' . $project . ' from ' . $latest . ' [' . $commit . ']</info>'
+        );
+
+        $message = 'Automated tag creation from [' . $latest . '] -> [' . $next . ']';
+
+        try {
+            $tagApi->create($this->config['service']['git']['company'], $project, [
+                'tag' => $next,
+                'message' => $message,
+                'object' => $commit,
+                'type' => 'commit',
+                'tagger' => [
+                    'name' => $this->config['service']['git']['username'],
+                    'email' => $this->config['service']['git']['username'],
+                    'date' => date(DATE_ATOM),
+                ],
+            ]);
+
+            $refs->create($this->config['service']['git']['company'], $project, [
+                'ref' => 'refs/tags/' . $next,
+                'sha' => $commit,
+            ]);
+
+            $response = $releases->create($this->config['service']['git']['company'], $project, [
+                'tag_name' => $next,
+                'target_commitish' => $commit,
+                'name' => $next,
+                'body' => $message,
+                'prerelease' => $to !== self::TAG_LEVEL_STABLE,
+            ]);
+        } catch (ExceptionInterface $e) {
+            $this->output->writeln(
+                '<error>Unable to create references: ' . $e->getMessage() . '</error>' . PHP_EOL
+            );
+            return;
+        }
+
+        if (!isset($response['html_url'])) {
+            $this->output->writeln(
+                '<error>Url not returned in response: ' . json_encode($response) . '</error>' . PHP_EOL
+            );
+            return;
+        }
+
+        $this->output->writeln(
+            '<info>Created tag: ' . $response['html_url'] . '</info>' . PHP_EOL
+        );
     }
 }
