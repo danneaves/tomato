@@ -38,16 +38,11 @@ class Projects extends AbstractCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        /** @var Client $git */
-        $this->git = $this->container['service:git'];
-        $this->config = $this->container['config'];
-
         $page = 1;
-
-        while ($repos = $this->git->organization()->repositories($this->config['service']['git']['company'], 'all', $page++)) {
+        while ($repos = $this->gitHubClient->organization()->repositories($this->config['service']['git']['company'], 'all', $page++)) {
             foreach ($repos as $repo) {
                 try {
-                    $composer = $this->git->repo()->contents()->show($repo['owner']['login'], $repo['name'], 'composer.json', 'master');
+                    $composer = $this->gitHubClient->repo()->contents()->show($repo['owner']['login'], $repo['name'], 'composer.json', 'master');
                 } catch (\Exception $e) {
                     continue;
                 }

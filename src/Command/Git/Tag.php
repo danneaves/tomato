@@ -122,6 +122,22 @@ class Tag extends AbstractCommand
     }
 
     /**
+     * @return Client
+     */
+    protected function getGitHubClient()
+    {
+        return $this->container['service:git'];
+    }
+
+    /**
+     * @return array
+     */
+    protected function getConfig()
+    {
+        return $this->container['config'];
+    }
+
+    /**
      * @param InputInterface $input
      * @param OutputInterface $output
      * @return int|null|void
@@ -131,12 +147,8 @@ class Tag extends AbstractCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        /** @var Client $git */
-        $this->git = $this->container['service:git'];
-        $this->config = $this->container['config'];
         $this->input = $input;
         $this->output = $output;
-
         $source = $input->getOption('source');
         $name = $input->getOption('name');
         $scope = $input->getOption('scope');
@@ -190,13 +202,13 @@ class Tag extends AbstractCommand
     private function prune($safe = true): void
     {
         /** @var GitData $git */
-        $git = $this->git->api('git');
+        $git = $this->gitHubClient->api('git');
 
         /** @var GitData\References $refs */
         $refs = $git->references();
 
         /** @var Repo $repos */
-        $repos = $this->git->api('repos');
+        $repos = $this->gitHubClient->api('repos');
         $releases = $repos->releases();
 
         foreach ($this->projects as $project) {
@@ -285,7 +297,7 @@ class Tag extends AbstractCommand
         }
 
         /** @var GitData $git */
-        $git = $this->git->api('git');
+        $git = $this->gitHubClient->api('git');
         $refs = $git->references();
 
         foreach ($this->projects as $project) {
@@ -331,9 +343,9 @@ class Tag extends AbstractCommand
     private function bumpMinorTag(string $from, string $to, array $tags, string $project, bool $newest = false)
     {
         /** @var GitData $git */
-        $git = $this->git->api('git');
+        $git = $this->gitHubClient->api('git');
         /** @var Repo $repo */
-        $repo = $this->git->api('repo');
+        $repo = $this->gitHubClient->api('repo');
 
         $refs = $git->references();
         $tagApi = $git->tags();

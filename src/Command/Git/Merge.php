@@ -29,16 +29,13 @@ class Merge extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        /** @var Client $git */
-        $git = $this->container['service:git'];
-        $config = $this->container['config'];
         $source = $input->getOption('source');
         $destination = $input->getOption('destination');
         $scope = $input->getOption('scope');
 
         /** @var array $projects */
         $projects = [] === $input->getOption('projects')
-            ? $config['projects'][$scope]
+            ? $this->config['projects'][$scope]
             : $input->getOption('projects');
 
         foreach ($projects as $project) {
@@ -47,11 +44,11 @@ class Merge extends AbstractCommand
             );
 
             /** @var Repo $repo */
-            $repo = $git->api('repo');
+            $repo = $this->gitHubClient->api('repo');
 
             try {
                 $response = $repo->merge(
-                    $config['service']['git']['company'],
+                    $this->config['service']['git']['company'],
                     $project,
                     $destination,
                     $source,
