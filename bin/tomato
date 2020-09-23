@@ -17,16 +17,17 @@ $container->register(new Provider\ConfigServiceProvider());
 $container->register(new Provider\GitServiceProvider());
 $container->register(new Provider\CliServiceProvider());
 $container->register(new Provider\ConsoleOutputServiceProvider());
+$container->register(new Provider\GitCommandsProvider());
 
 $app = new Application('Tomato', '0.1.0');
 $app->addCommands([
     new Command\Deploy($container),
-    new Command\Git\PullRequest($container),
-    new Command\Git\Merge($container),
-    new Command\Git\MergeDown($container),
-    new Command\Git\Branch($container),
-    new Command\Git\Tag($container),
-    new Command\Git\Projects($container),
+    $container['command:git:pullRequest'],
+    $container['command:git:branch'],
+    $container['command:git:merge'],
+    $container['command:git:projects'],
+    $container['command:git:tag'],
+    $container['command:git:mergeDown'],
     new Command\Config($container),
 ]);
 $app->run(null, $container['service:console-output']);

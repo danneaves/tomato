@@ -23,30 +23,27 @@ class MergeDown extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        /** @var Client $git */
-        $git = $this->container['service:git'];
-        $config = $this->container['config'];
         $source = $input->getOption('source');
         $destination = $input->getOption('destination');
         $scope = $input->getOption('scope');
         $then = $input->getOption('then');
 
         /** @var array $projects */
-        $projects = $config['projects'][$scope];
+        $projects = $this->config['projects'][$scope];
 
-        $start = null === $source ? 0 : array_search($source, $config['branches'], true);
+        $start = null === $source ? 0 : array_search($source, $this->config['branches'], true);
         $end = null === $destination
-            ? count($config['branches'])
-            : array_search($destination, $config['branches'], true);
+            ? count($this->config['branches'])
+            : array_search($destination, $this->config['branches'], true);
 
-        $branches = array_slice($config['branches'], $start, $end);
+        $branches = array_slice($this->config['branches'], $start, $end);
 
         if (isset($then)) {
             $branches[] = $then;
         }
 
         /** @var Repo $repo */
-        $repo = $git->api('repo');
+        $repo = $this->gitHubClient->api('repo');
 
         foreach ($projects as $project) {
             foreach ($branches as $key => $branch) {
@@ -60,7 +57,7 @@ class MergeDown extends AbstractCommand
 
                 try {
                     $response = $repo->merge(
-                        $config['service']['git']['company'],
+                        $this->config['service']['git']['company'],
                         $project,
                         $branches[$key + 1],
                         $branch,

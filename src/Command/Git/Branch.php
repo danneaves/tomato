@@ -30,9 +30,6 @@ class Branch extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        /** @var Client $git */
-        $git = $this->container['service:git'];
-        $config = $this->container['config'];
         $source = $input->getOption('source');
         $name = $input->getOption('name');
         $scope = $input->getOption('scope');
@@ -40,7 +37,7 @@ class Branch extends AbstractCommand
 
         /** @var array $projects */
         $projects = [] === $input->getOption('projects')
-            ? $config['projects'][$scope]
+            ? $this->config['projects'][$scope]
             : $input->getOption('projects');
 
         foreach ($projects as $project) {
@@ -50,15 +47,15 @@ class Branch extends AbstractCommand
             $output->writeln('<title>' . $message . '</title>');
 
             /** @var GitData\References $refs */
-            $refs = $git->api('git')->references();
+            $refs = $this->gitHubClient->api('git')->references();
 
             try {
                 if ($isDelete) {
-                    $refs->remove($config['service']['git']['company'], $project, 'heads/'.$name);
+                    $refs->remove($this->config['service']['git']['company'], $project, 'heads/'.$name);
                     $output->writeln('<info>Deleted ' . $name . ' branch from ' . $project . '</info>' . PHP_EOL);
                     continue;
                 }
-                $branch = $refs->show($config['service']['git']['company'], $project, 'heads/'.$source);
+                $branch = $refs->show($this->config['service']['git']['company'], $project, 'heads/'.$source);
             } catch (\Exception $e) {
                 $output->writeln('<error>' . $e->getMessage() . '</error>' . PHP_EOL);
                 continue;
@@ -74,7 +71,7 @@ class Branch extends AbstractCommand
             );
 
             try {
-                $newBranch = $refs->create($config['service']['git']['company'], $project, [
+                $newBranch = $refs->create($this->config['service']['git']['company'], $project, [
                     'ref' => 'refs/heads/' . $name,
                     'sha' => $branch['object']['sha'],
                 ]);
