@@ -15,8 +15,9 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Tomato\Command\AbstractCommand;
+use Tomato\Command\AbstractGitCommand;
 
-class Tag extends AbstractCommand
+class Tag extends AbstractGitCommand
 {
     private const TAG_LEVEL_ALPHA = 'alpha';
     private const TAG_LEVEL_BETA = 'beta';

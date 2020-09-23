@@ -8,8 +8,9 @@ use Tomato\Command\AbstractCommand;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Tomato\Command\AbstractGitCommand;
 
-class PullRequest extends AbstractCommand
+class PullRequest extends AbstractGitCommand
 {
     protected function configure()
     {

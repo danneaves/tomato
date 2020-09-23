@@ -3,13 +3,12 @@
 namespace Tomato\Command\Git;
 
 use Github\Api\GitData;
-use Github\Client;
-use Tomato\Command\AbstractCommand;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Tomato\Command\AbstractGitCommand;
 
-class Branch extends AbstractCommand
+class Branch extends AbstractGitCommand
 {
     protected function configure()
     {

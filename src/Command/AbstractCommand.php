@@ -2,7 +2,6 @@
 
 namespace Tomato\Command;
 
-use Github\Client;
 use Pimple\Container;
 use Symfony\Component\Console\Command\Command;
 
@@ -15,23 +14,12 @@ abstract class AbstractCommand extends Command
     /**
      * @var Container
      */
-    protected $gitHubClient;
+    protected $container;
 
-    /**
-     * @var array
-     */
-    protected $config;
-
-    /**
-     * AbstractCommand constructor.
-     * @param Client $gitHubClient
-     * @param array $config
-     * @param string|null $name
-     */
-    public function __construct(Client $gitHubClient, array $config, string $name = null)
+    public function __construct(Container $container, $name = null)
     {
-        $this->gitHubClient = $gitHubClient;
-        $this->config = $config;
+        $this->container = $container;
+
         parent::__construct($name);
     }
 }
