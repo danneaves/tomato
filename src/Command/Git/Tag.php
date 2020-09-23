@@ -122,22 +122,6 @@ class Tag extends AbstractCommand
     }
 
     /**
-     * @return Client
-     */
-    protected function getGitHubClient()
-    {
-        return $this->container['service:git'];
-    }
-
-    /**
-     * @return array
-     */
-    protected function getConfig()
-    {
-        return $this->container['config'];
-    }
-
-    /**
      * @param InputInterface $input
      * @param OutputInterface $output
      * @return int|null|void
