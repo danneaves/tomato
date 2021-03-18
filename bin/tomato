@@ -18,7 +18,7 @@ $container->register(new Provider\GitServiceProvider());
 $container->register(new Provider\CliServiceProvider());
 $container->register(new Provider\ConsoleOutputServiceProvider());
 
-$app = new Application('Tomato', '0.1.0');
+$app = new Application('Tomato', '1.1.0');
 $app->addCommands([
     new Command\Deploy($container),
     new Command\Git\PullRequest($container),
