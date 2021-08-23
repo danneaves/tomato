@@ -2,11 +2,8 @@
 
 namespace Tomato\Command\Git;
 
-use Composer\Semver\Semver;
-use Github\Api\GitData;
 use Github\Client;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Tomato\Command\AbstractCommand;
 
