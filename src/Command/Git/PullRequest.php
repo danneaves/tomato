@@ -8,8 +8,9 @@ use Tomato\Command\AbstractCommand;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Tomato\Command\AbstractGitCommand;
 
-class PullRequest extends AbstractCommand
+class PullRequest extends AbstractGitCommand
 {
     protected function configure()
     {
@@ -29,16 +30,13 @@ class PullRequest extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        /** @var Client $git */
-        $git = $this->container['service:git'];
-        $config = $this->container['config'];
         $source = $input->getOption('source');
         $destination = $input->getOption('destination');
         $scope = $input->getOption('scope');
 
         /** @var array $projects */
         $projects = [] === $input->getOption('projects')
-            ? $config['projects'][$scope]
+            ? $this->config['projects'][$scope]
             : $input->getOption('projects');
 
         foreach ($projects as $project) {
@@ -47,11 +45,11 @@ class PullRequest extends AbstractCommand
             );
 
             /** @var ReviewRequest $request */
-            $request = $git->api('pull_request');
+            $request = $this->gitHubClient->api('pull_request');
 
             try {
                 /** @var array $response */
-                $response = $request->create($config['service']['git']['company'], $project, [
+                $response = $request->create($this->config['service']['git']['company'], $project, [
                     'base'  => $destination,
                     'head'  => $source,
                     'title' => 'Auto generated request: ' . $source . ' >> ' . $destination,
